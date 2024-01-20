@@ -49,6 +49,7 @@ public class HideVABPlugin : BaseSpaceWarpPlugin
 
     private const string ToolbarOabButtonID = "BTN-HideVABOAB";
     private const string HideVAB_Enclosure_Key = "HideVAB_Enclosure";
+    private const string HideVAB_Enclosure_ShaderName = "KSP2/Scenery/Standard Tileable Lightmap (Vertex Color)";
     private const float CameraBoundsScaleFactor = 20.0f;
 
     public bool IsActive { get; private set; } = false;
@@ -64,7 +65,7 @@ public class HideVABPlugin : BaseSpaceWarpPlugin
         "OAB(Clone)/ENVSpawner/Env-Terrestrial(Clone)/UI-Editor_Interior/Model/Exterior",
         "OAB(Clone)/ENVSpawner/Env-Terrestrial(Clone)/UI-Editor_Interior/Model/Interior/VAB_Interior_Windows01",
         "OAB(Clone)/ENVSpawner/Env-Terrestrial(Clone)/UI-Editor_Interior/Model/Interior/VAB_Interior",
-        "OAB(Clone)/ENVSpawner/Env-Terrestrial(Clone)/UI-Editor_Interior/Model/Interior/VAB_InteriorFloor",
+        //"OAB(Clone)/ENVSpawner/Env-Terrestrial(Clone)/UI-Editor_Interior/Model/Interior/VAB_InteriorFloor",
         "OAB(Clone)/ENVSpawner/Env-Terrestrial(Clone)/UI-Editor_Interior/Model/Interior/VAB_Lights/VAB_Lights_Point",
     };
 
@@ -136,7 +137,6 @@ public class HideVABPlugin : BaseSpaceWarpPlugin
             }
         }
 
-        // Toggle visibility of enclosure.
         m_hideVABEnclosure?.SetActive(IsActive);
 
         if (IsActive) {
@@ -154,6 +154,29 @@ public class HideVABPlugin : BaseSpaceWarpPlugin
 
         GameObject.Find(ToolbarOabButtonID)?.GetComponent<UIValue_WriteBool_Toggle>()?.SetValue(IsActive);
 
+    }
+
+    private void UpdateEnclosureMaterial()
+    {
+        MeshRenderer r = m_hideVABEnclosure.GetComponentInChildren<MeshRenderer>();
+        if (r == null) {
+            Logger.LogMessage("no renderer");
+            return;
+        }
+
+        if (r.material.shader.name == HideVAB_Enclosure_ShaderName) {
+            Logger.LogMessage("shader already set");
+            return;
+        }
+
+        Shader s = Shader.Find(HideVAB_Enclosure_ShaderName);
+        if (s == null) {
+            Logger.LogMessage("shader not found");
+        }
+
+        Material m = new Material(s);
+        m.mainTexture = r.material.mainTexture;
+        r.material = m;
     }
 
     private void OnOABLoaded(MessageCenterMessage message)
@@ -185,6 +208,7 @@ public class HideVABPlugin : BaseSpaceWarpPlugin
             Debug.Log("HideVAB_Enclosure loaded");
             m_hideVABEnclosure = Instantiate(handle.Result);
             m_hideVABEnclosure.SetActive(false);
+            UpdateEnclosureMaterial();
         }
         else {
             Debug.Log("HideVAB_Enclosure failed to load");
@@ -201,7 +225,10 @@ public class HideVABPlugin : BaseSpaceWarpPlugin
     {
         KSP.OAB.ObjectAssemblyBuilder builder = KSP.Game.GameManager.Instance.Game.OAB.Current;
 
-        // Camera state gets a little off when switching between blueprint mode. Re-toggling ortho
+        // depending on how you toggle blueprint there can a be a little transition time..wait for it
+        yield return new WaitUntil(() => builder.CameraManager.CameraOrthoMode() == enabled);
+
+        // Camera state can get a little off when switching between blueprint mode. Re-toggling ortho
         // over a couple frames fixes it up...
 
         yield return new WaitForUpdate();
